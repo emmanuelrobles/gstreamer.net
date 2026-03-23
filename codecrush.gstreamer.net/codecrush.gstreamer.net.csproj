@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <PublishSingleFile>true</PublishSingleFile>
+        <IsPackable>true</IsPackable>
+        <PackageId>CodeCrush.GStreamer</PackageId>
+        <Version>0.1.0</Version>
+        <Authors>CodeCrush</Authors>
+        <Company>CodeCrush</Company>
+        <Description>.NET package for CodeCrush GStreamer integration.</Description>
+        <PackageTags>gstreamer;media;dotnet</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryType>git</RepositoryType>
+        <RepositoryUrl>https://github.com/codecrush/codecrush.gstreamer</RepositoryUrl>
+    </PropertyGroup>
+    
+    <ItemGroup>
+      <ProjectReference Include="..\gstreamer\subprojects\gstreamer-sharp\sources\gstreamer-sharp.csproj"
+                        SetTargetFramework="TargetFramework=netstandard2.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Include="README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+    
+</Project>

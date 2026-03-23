@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="codecrush.gstreamer.net/codecrush.gstreamer.net.csproj" />
+  <Project Path="gstreamer/subprojects/gstreamer-sharp/sources/gstreamer-sharp.csproj" />
+</Solution>
