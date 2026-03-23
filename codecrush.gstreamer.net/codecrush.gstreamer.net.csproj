@@ -4,24 +4,36 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <PublishSingleFile>true</PublishSingleFile>
+        
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        
         <IsPackable>true</IsPackable>
         <PackageId>CodeCrush.GStreamer</PackageId>
-        <Version>0.1.0</Version>
-        <Authors>CodeCrush</Authors>
+        <Authors>Emmanuel Robles</Authors>
         <Company>CodeCrush</Company>
         <Description>.NET package for CodeCrush GStreamer integration.</Description>
         <PackageTags>gstreamer;media;dotnet</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <RepositoryType>git</RepositoryType>
-        <RepositoryUrl>https://github.com/codecrush/codecrush.gstreamer</RepositoryUrl>
+        <RepositoryUrl>https://forgejo.codecrush.dev/emmanuelrobles/codecrush.gstreamer.net</RepositoryUrl>
+    </PropertyGroup>
+    
+    <PropertyGroup>
+        <GStreamerSharpSourcesDir>../gstreamer/subprojects/gstreamer-sharp/sources/</GStreamerSharpSourcesDir>
     </PropertyGroup>
     
     <ItemGroup>
-      <ProjectReference Include="..\gstreamer\subprojects\gstreamer-sharp\sources\gstreamer-sharp.csproj"
-                        SetTargetFramework="TargetFramework=netstandard2.0" />
+        <Compile Include="$(GStreamerSharpSourcesDir)/generated/**/*.cs" />
+        <Compile Include="$(GStreamerSharpSourcesDir)/custom/**/*.cs" />
+        <Content Include="$(GStreamerSharpSourcesDir)/gstreamer-sharp.dll.config"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <PackageReference Include="GLibSharp.GLibSharp" Version="3.22.0" />
+        <PackageReference Include="GLibSharp.GioSharp" Version="3.22.0" />
+        <PackageReference Include="GLibSharp.AtkSharp" Version="3.22.0" />
+    </ItemGroup> 
+    
     <ItemGroup>
       <None Include="README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
