@@ -7,7 +7,7 @@ namespace codecrush.gstreamer.source_generator.tests;
 public class DllMapGeneratorTest
 {
     [Fact]
-    public Task GeneratesDllMap()
+    public void GeneratesDllMap()
     {
         var syntaxTree = CSharpSyntaxTree.ParseText("", cancellationToken: TestContext.Current.CancellationToken);
 
@@ -37,9 +37,17 @@ public class DllMapGeneratorTest
             generators: [generator.AsSourceGenerator()],
             additionalTexts: additionalFiles);
 
-        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, 
+            out var outputCompilation, 
+            out var diagnostics, 
+            TestContext.Current.CancellationToken);
 
-        return Verifier.Verify(driver);
+        Assert.Empty(diagnostics); // no diagnostics expected
+        Assert.Equal(3, outputCompilation.SyntaxTrees.Count()); // 1 for the source, 2 for the generated code
+ 
+        var results = driver.GetRunResult();
+ 
+        Assert.Empty(results.Diagnostics);
     }
 
     private sealed class InMemoryAdditionalText(string path, string content) : AdditionalText
