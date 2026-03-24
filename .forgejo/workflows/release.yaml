@@ -43,7 +43,7 @@ jobs:
 
           echo "TAG_NAME=${TAG_NAME}" >> "${GITHUB_ENV}"
           echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> "${GITHUB_ENV}"
-          echo "PACKAGE_ID=codecrush.gstreamer.net" >> "${GITHUB_ENV}"
+          echo "PACKAGE_ID=CodeCrush.GStreamer" >> "${GITHUB_ENV}"
           echo "Publishing package version ${PACKAGE_VERSION} from tag ${TAG_NAME}."
 
       - name: Download package from private feed
@@ -70,14 +70,34 @@ jobs:
             --user "${FORGEJO_NUGET_USERNAME}:${FORGEJO_NUGET_PASSWORD}" \
             "${NUGET_SOURCE}")"
 
+          PACKAGE_ID_LOWER="$(printf '%s' "${PACKAGE_ID}" | tr '[:upper:]' '[:lower:]')"
           PACKAGE_BASE_URL="$(printf '%s' "${SERVICE_INDEX_JSON}" | tr -d '\n' | sed -n 's/.*"@id"[[:space:]]*:[[:space:]]*"\([^"]*v3-flatcontainer[^"]*\)".*/\1/p')"
-          if [ -z "${PACKAGE_BASE_URL}" ]; then
-            echo "Could not find PackageBaseAddress (v3-flatcontainer) in ${NUGET_SOURCE}."
-            exit 1
+
+          if [ -n "${PACKAGE_BASE_URL}" ]; then
+            PACKAGE_URL="${PACKAGE_BASE_URL%/}/${PACKAGE_ID_LOWER}/${PACKAGE_VERSION}/${PACKAGE_ID_LOWER}.${PACKAGE_VERSION}.nupkg"
+          else
+            REGISTRATIONS_BASE_URL="$(printf '%s' "${SERVICE_INDEX_JSON}" | tr -d '\n' | sed -n 's/.*"@id"[[:space:]]*:[[:space:]]*"\([^"]*registrations[^"]*\)".*/\1/p')"
+            if [ -z "${REGISTRATIONS_BASE_URL}" ]; then
+              echo "Could not find either PackageBaseAddress or RegistrationsBaseUrl in ${NUGET_SOURCE}."
+              exit 1
+            fi
+
+            REGISTRATION_INDEX_URL="${REGISTRATIONS_BASE_URL%/}/${PACKAGE_ID_LOWER}/index.json"
+            REGISTRATION_INDEX_JSON="$(curl -fsSL \
+              --user "${FORGEJO_NUGET_USERNAME}:${FORGEJO_NUGET_PASSWORD}" \
+              "${REGISTRATION_INDEX_URL}")"
+
+            PACKAGE_URL="$(printf '%s' "${REGISTRATION_INDEX_JSON}" | tr -d '\n' \
+              | grep -o '\"packageContent\"[[:space:]]*:[[:space:]]*\"[^\"]*\"' \
+              | sed 's/^[^:]*:[[:space:]]*\"//; s/\"$//' \
+              | grep -F -m1 "/${PACKAGE_VERSION}/" || true)"
+
+            if [ -z "${PACKAGE_URL}" ]; then
+              echo "Could not resolve packageContent URL for ${PACKAGE_ID} ${PACKAGE_VERSION} from ${REGISTRATION_INDEX_URL}."
+              exit 1
+            fi
           fi
 
-          PACKAGE_ID_LOWER="$(printf '%s' "${PACKAGE_ID}" | tr '[:upper:]' '[:lower:]')"
-          PACKAGE_URL="${PACKAGE_BASE_URL%/}/${PACKAGE_ID_LOWER}/${PACKAGE_VERSION}/${PACKAGE_ID_LOWER}.${PACKAGE_VERSION}.nupkg"
           PACKAGE_FILE="artifacts/${PACKAGE_ID_LOWER}.${PACKAGE_VERSION}.nupkg"
 
           mkdir -p artifacts
