@@ -1,3 +1,5 @@
 <Solution>
   <Project Path="codecrush.gstreamer.net/codecrush.gstreamer.net.csproj" />
+  <Project Path="codecrush.gstreamer.source-generator.tests\codecrush.gstreamer.source-generator.tests.csproj" />
+  <Project Path="codecrush.gstreamer.source-generator/codecrush.gstreamer.source-generator.csproj" />
 </Solution>
