@@ -8,14 +8,14 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         
         <IsPackable>true</IsPackable>
-        <PackageId>CodeCrush.GStreamer</PackageId>
+        <PackageId>CodeCrush.gstreamer</PackageId>
         <Authors>Emmanuel Robles</Authors>
         <Company>CodeCrush</Company>
         <Description>.NET package for CodeCrush GStreamer integration.</Description>
         <PackageTags>gstreamer;media;dotnet</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <RepositoryType>git</RepositoryType>
-        <RepositoryUrl>https://forgejo.codecrush.dev/emmanuelrobles/codecrush.gstreamer.net</RepositoryUrl>
+        <RepositoryUrl>https://forgejo.codecrush.dev/CodeCrush/codecrush.gstreamer.net</RepositoryUrl>
     </PropertyGroup>
     
     <PropertyGroup>

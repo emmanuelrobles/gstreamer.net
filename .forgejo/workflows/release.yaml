@@ -1,0 +1,104 @@
+name: Publish NuGet to nuget.org
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (for manual runs)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish-nuget-org:
+    runs-on: docker
+
+    steps:
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve package version from tag
+        shell: bash
+        run: |
+          TAG_NAME="${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}"
+
+          if [ -z "${TAG_NAME}" ]; then
+            echo "No tag provided."
+            exit 1
+          fi
+
+          PACKAGE_VERSION="${TAG_NAME#v}"
+
+          if ! [[ "${PACKAGE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag '${TAG_NAME}' does not map to a valid SemVer package version."
+            exit 1
+          fi
+
+          echo "TAG_NAME=${TAG_NAME}" >> "${GITHUB_ENV}"
+          echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> "${GITHUB_ENV}"
+          echo "PACKAGE_ID=codecrush.gstreamer.net" >> "${GITHUB_ENV}"
+          echo "Publishing package version ${PACKAGE_VERSION} from tag ${TAG_NAME}."
+
+      - name: Download package from private feed
+        env:
+          FORGEJO_NUGET_USERNAME: ${{ secrets.FORGEJO_NUGET_USERNAME }}
+          FORGEJO_NUGET_PASSWORD: ${{ secrets.FORGEJO_NUGET_PASSWORD }}
+          NUGET_SOURCE: ${{ vars.NUGET_SOURCE }}
+        shell: bash
+        run: |
+          if [ -z "${FORGEJO_NUGET_USERNAME}" ]; then
+            echo "FORGEJO_NUGET_USERNAME secret is not set."
+            exit 1
+          fi
+          if [ -z "${FORGEJO_NUGET_PASSWORD}" ]; then
+            echo "FORGEJO_NUGET_PASSWORD secret is not set."
+            exit 1
+          fi
+          if [ -z "${NUGET_SOURCE}" ]; then
+            echo "NUGET_SOURCE variable is not set."
+            exit 1
+          fi
+
+          SERVICE_INDEX_JSON="$(curl -fsSL \
+            --user "${FORGEJO_NUGET_USERNAME}:${FORGEJO_NUGET_PASSWORD}" \
+            "${NUGET_SOURCE}")"
+
+          PACKAGE_BASE_URL="$(printf '%s' "${SERVICE_INDEX_JSON}" | tr -d '\n' | sed -n 's/.*"@id"[[:space:]]*:[[:space:]]*"\([^"]*v3-flatcontainer[^"]*\)".*/\1/p')"
+          if [ -z "${PACKAGE_BASE_URL}" ]; then
+            echo "Could not find PackageBaseAddress (v3-flatcontainer) in ${NUGET_SOURCE}."
+            exit 1
+          fi
+
+          PACKAGE_ID_LOWER="$(printf '%s' "${PACKAGE_ID}" | tr '[:upper:]' '[:lower:]')"
+          PACKAGE_URL="${PACKAGE_BASE_URL%/}/${PACKAGE_ID_LOWER}/${PACKAGE_VERSION}/${PACKAGE_ID_LOWER}.${PACKAGE_VERSION}.nupkg"
+          PACKAGE_FILE="artifacts/${PACKAGE_ID_LOWER}.${PACKAGE_VERSION}.nupkg"
+
+          mkdir -p artifacts
+          curl -fSL \
+            --user "${FORGEJO_NUGET_USERNAME}:${FORGEJO_NUGET_PASSWORD}" \
+            "${PACKAGE_URL}" \
+            --output "${PACKAGE_FILE}"
+
+          echo "PACKAGE_FILE=${PACKAGE_FILE}" >> "${GITHUB_ENV}"
+
+      - name: Push package to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "${NUGET_API_KEY}" ]; then
+            echo "NUGET_API_KEY secret is not set."
+            exit 1
+          fi
+
+          dotnet nuget push "${{ env.PACKAGE_FILE }}" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --api-key "${NUGET_API_KEY}" \
+            --skip-duplicate
