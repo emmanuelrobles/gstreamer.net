@@ -84,7 +84,7 @@ public sealed class DllMapperGenerator : IIncrementalGenerator
                               {
                                  {{g.Aggregate("_ => dllName",
                                       (acc, e) => 
-                                          $"\"{e.Target}\" => \"{e.Target}\",\n\t\t{acc}")
+                                          $"\"{e.Source}\" => \"{e.Target}\",\n\t\t{acc}")
                                  }}
                               };
                           }
@@ -106,7 +106,7 @@ public sealed class DllMapperGenerator : IIncrementalGenerator
                             return os switch 
                             {
                                 {{llOs
-                                    .Aggregate("_ => \"dllName\"",(acc, e) => 
+                                    .Aggregate("_ => dllName",(acc, e) => 
                                         $"global::CodeCrush.GStreamer.SourceGenerator.OsEnum.{e.ToUpper()} => GetDllTarget{e}(dllName),\n\t\t\t{acc}")}}
                                 ,
                             };
