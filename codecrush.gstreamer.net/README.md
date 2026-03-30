@@ -1,11 +1,11 @@
-# CodeCrush.GStreamer
+# CodeCrush.gstreamer
 
-`CodeCrush.GStreamer` provides .NET integration helpers for GStreamer.
+`CodeCrush.gstreamer` provides .NET integration helpers for GStreamer.
 
 ## Installation
 
 ```bash
-dotnet add package CodeCrush.GStreamer
+dotnet add package CodeCrush.gstreamer
 ```
 
 ## Prerequisites
