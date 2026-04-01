@@ -16,3 +16,11 @@ dotnet add package CodeCrush.gstreamer
 ## Notes
 
 - Targets: `net10.0`
+
+## Repository & Issues
+
+- Primary repository: https://forgejo.codecrush.dev/CodeCrush/codecrush.gstreamer.net
+- GitHub mirror: https://github.com/emmanuelrobles/gstreamer.net
+- Issue tracker: https://github.com/emmanuelrobles/gstreamer.net/issues/new/choose
+
+Please open all bug reports and feature requests on the GitHub issue tracker.
