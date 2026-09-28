@@ -62,7 +62,7 @@ jobs:
 
       - name: Push package to NuGet.org
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ secrets.PUBLIC_NUGET_API_KEY }}
         shell: bash
         run: |
           if [ -z "${NUGET_API_KEY}" ]; then
