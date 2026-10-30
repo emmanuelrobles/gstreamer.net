@@ -61,6 +61,16 @@ element factory lookup returns null.
 not exist unless `gstreamer-webrtc-1.0` is installed. It is required only for
 `GLib.Value` boxing of that boxed type.
 
+GType registration for the generated wrapper classes is best effort per type.
+`GtkSharp.GstreamerSharp.ObjectManager` tries each registration on its own, so a
+type whose native module the runtime does not contain is simply left
+unregistered - it is only wrapped as its base class, and using it directly still
+fails with the module named. Without this, one unguarded registration was enough
+to break every wrapper class: on a gst-full build without WebRTC and RTSP
+server, touching `Gst.App.AppSink` failed with
+`DllNotFoundException: gstwebrtc-1.0-0.dll`, because every wrapper class's static
+constructor runs the whole registry.
+
 ## Notes
 
 - Targets: `net10.0`
