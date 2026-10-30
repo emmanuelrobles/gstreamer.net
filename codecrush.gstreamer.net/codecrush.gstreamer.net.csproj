@@ -24,13 +24,13 @@
     
     <ItemGroup>
         <!--
-            gstreamer-sharp's sources, minus two files that are replaced by local
-            overrides:
+            gstreamer-sharp's sources, minus two files that are replaced:
               * custom/Application.cs - no eager Gst.WebRTC GType registration,
                 plus gst_init_static_plugins() for gst-full.
-              * generated/GtkSharp/ObjectManager.cs - per-entry GType
-                registration, so a module the runtime lacks cannot break every
-                wrapper class.
+              * generated/GtkSharp/ObjectManager.cs - not compiled as it is. It
+                is added as an AdditionalFile below and rewritten by
+                ObjectManagerGenerator, so a module the runtime lacks cannot
+                break every wrapper class.
         -->
         <Compile Include="$(GStreamerSharpSourcesDir)/generated/**/*.cs" />
         <Compile Include="$(GStreamerSharpSourcesDir)/custom/**/*.cs" />
@@ -50,6 +50,12 @@
         <AdditionalFiles Include="$(GStreamerSharpSourcesDir)gstreamer-sharp.dll.config"/>
         <AdditionalFiles Include="gstreamer-sharp.overlay.dll.config"/>
         <AdditionalFiles Include="gstreamer-full.dll.config"/>
+        <!--
+            The GType registration list, consumed straight from the submodule for
+            the same reason: a submodule bump that adds an object type is picked
+            up without a copy step or a hand-edited list.
+        -->
+        <AdditionalFiles Include="$(GStreamerSharpSourcesDir)generated/GtkSharp/ObjectManager.cs"/>
     </ItemGroup>
     
     <ItemGroup>

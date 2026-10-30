@@ -96,7 +96,7 @@ public sealed class DllMapperGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    private static readonly string GeneratedCodeAttribute = BuildGeneratedCodeAttribute();
+    private static readonly string GeneratedCodeAttribute = GeneratorInfo.GeneratedCodeAttribute;
 
     /// <summary>
     /// Everything above the first declaration. Ends with a newline so a template
@@ -336,12 +336,6 @@ public sealed class DllMapperGenerator : IIncrementalGenerator
         string.Join(NewLine, names.Select(static name => "    " + name + ","));
 
     private static string Quote(string value) => "\"" + value + "\"";
-
-    private static string BuildGeneratedCodeAttribute()
-    {
-        var assembly = typeof(DllMapperGenerator).Assembly.GetName();
-        return $"""global::System.CodeDom.Compiler.GeneratedCode("{assembly.Name}", "{assembly.Version}")""";
-    }
 
     /// <summary>
     /// Sort key that keeps the well-known members first and in a stable order,

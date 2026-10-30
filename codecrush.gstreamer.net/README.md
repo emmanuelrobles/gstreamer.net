@@ -71,6 +71,12 @@ server, touching `Gst.App.AppSink` failed with
 `DllNotFoundException: gstwebrtc-1.0-0.dll`, because every wrapper class's static
 constructor runs the whole registry.
 
+The list itself is not maintained here: `generated/GtkSharp/ObjectManager.cs`
+from the submodule is read as an `AdditionalFile` and the class is emitted from
+it, so a submodule bump that adds an object type is picked up without a copy
+step. An entry the generator cannot read fails the build instead of quietly
+producing a partial registry.
+
 ## Notes
 
 - Targets: `net10.0`

@@ -28,4 +28,15 @@
       <ProjectReference Include="..\codecrush.gstreamer.source-generator\codecrush.gstreamer.source-generator.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!--
+            The real file the generator reads in the bindings project, so a
+            submodule bump that changes its shape fails here as well as at build
+            time.
+        -->
+        <None Include="..\gstreamer\subprojects\gstreamer-sharp\sources\generated\GtkSharp\ObjectManager.cs"
+              Link="upstream\ObjectManager.cs"
+              CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
 </Project>
