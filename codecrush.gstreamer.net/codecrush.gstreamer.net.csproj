@@ -24,13 +24,18 @@
     
     <ItemGroup>
         <!--
-            gstreamer-sharp's sources, minus custom/Application.cs: the local
-            Overrides/Application.cs replaces it (no eager Gst.WebRTC GType
-            registration, plus gst_init_static_plugins() for gst-full).
+            gstreamer-sharp's sources, minus two files that are replaced by local
+            overrides:
+              * custom/Application.cs - no eager Gst.WebRTC GType registration,
+                plus gst_init_static_plugins() for gst-full.
+              * generated/GtkSharp/ObjectManager.cs - per-entry GType
+                registration, so a module the runtime lacks cannot break every
+                wrapper class.
         -->
         <Compile Include="$(GStreamerSharpSourcesDir)/generated/**/*.cs" />
         <Compile Include="$(GStreamerSharpSourcesDir)/custom/**/*.cs" />
         <Compile Remove="$(GStreamerSharpSourcesDir)/custom/Application.cs" />
+        <Compile Remove="$(GStreamerSharpSourcesDir)/generated/GtkSharp/ObjectManager.cs" />
         <!--
             The dllmap documents, one profile each. The file name picks the
             profile; a ".overlay" in the name means the file is applied on top

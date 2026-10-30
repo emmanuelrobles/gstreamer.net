@@ -2,7 +2,7 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using CodeCrush.GStreamer.SourceGenerator;
 
-namespace codecrush.gstreamer.source_generator.tests;
+namespace codecrush.gstreamer.net.tests;
 
 /// <summary>
 /// Guards the two places the dllmap files can drift away from the bindings: a
