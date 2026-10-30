@@ -23,18 +23,4 @@
         <ProjectReference Include="..\codecrush.gstreamer.net\codecrush.gstreamer.net.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-        <!--
-            Files the drift tests compare against what is compiled in. Copied to
-            the output so the tests do not have to guess at the repository
-            layout.
-        -->
-        <None Include="..\gstreamer\subprojects\gstreamer-sharp\sources\generated\GtkSharp\ObjectManager.cs"
-              Link="upstream\ObjectManager.cs"
-              CopyToOutputDirectory="PreserveNewest"/>
-        <None Include="..\codecrush.gstreamer.net\Overrides\ObjectManager.cs"
-              Link="overrides\ObjectManager.cs"
-              CopyToOutputDirectory="PreserveNewest"/>
-    </ItemGroup>
-
 </Project>
