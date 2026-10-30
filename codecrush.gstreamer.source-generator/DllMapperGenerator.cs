@@ -1,120 +1,356 @@
-using System.Collections.Frozen;
-using System.Collections.ObjectModel;
-using System.Reflection;
+using System.Collections.Immutable;
 using System.Xml;
 using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 
 namespace codecrush.gstreamer.source_generator;
 
-internal record DllMapRecord(string Source, string Target, string Os);
+/// <summary>
+/// One <c>&lt;dllmap&gt;</c> entry, tagged with the runtime profile described by
+/// the file it came from.
+/// </summary>
+/// <param name="Layer">
+/// Where the entry came from: 0 for a file that ships with the bindings, 1 for
+/// an overlay. Overlays are applied last, so they replace the base entry for
+/// the same <c>(os, dll)</c> instead of the base file having to be copied.
+/// </param>
+internal sealed record DllMapRecord(string Profile, string Os, string Source, string Target, int Layer);
 
+/// <summary>
+/// Turns <c>dll.config</c> files into the OS- and profile-aware map used to
+/// translate a DllImport name into the file that actually has to be loaded.
+/// </summary>
+/// <remarks>
+/// gstreamer-sharp declares every binding against its Windows name
+/// (<c>gstreamer-1.0-0.dll</c>, <c>glib-2.0-0.dll</c>, ...), so something has to
+/// say what that is called on the platform we are running on.
+/// <para>
+/// The upstream <c>gstreamer-sharp.dll.config</c> maps those to the per-library
+/// Unix sonames - a regular, dynamically linked GStreamer installation.
+/// <c>gstreamer-full.dll.config</c> maps the same names onto the single library
+/// a gst-full build produces. The file name selects the profile, so the two do
+/// not have to share a schema: whatever is in the file gets emitted verbatim
+/// for the (profile, os) pair its <c>os</c> attribute names.
+/// </para>
+/// <para>
+/// A file named <c>&lt;stem&gt;.overlay.dll.config</c> belongs to the profile of
+/// <c>&lt;stem&gt;</c> and is applied on top of it, entry by entry. That lets
+/// upstream's config be consumed directly - so additions follow a submodule bump
+/// for free - while the handful of entries upstream gets wrong live in a small
+/// overlay instead of a full copy that has to be kept in sync by hand.
+/// </para>
+/// An <c>os</c> a profile does not mention falls through to the identity map,
+/// which leaves loading to the platform's own search rules.
+/// </remarks>
 [Generator]
 public sealed class DllMapperGenerator : IIncrementalGenerator
 {
-    private static AssemblyName AssemblyName = typeof(DllMapperGenerator).Assembly.GetName();
-    private static string GeneratedCodeAttribute = $@"global::System.CodeDom.Compiler.GeneratedCode(""{AssemblyName.Name}"", ""{AssemblyName.Version}"")";
-        
+    internal const string SystemProfile = "SYSTEM";
+    internal const string FullProfile = "FULL";
+
+    private const string ConfigSuffix = ".dll.config";
+
+    /// <summary>
+    /// Part of a file name that marks it as an overlay, see
+    /// <see cref="Classify"/>.
+    /// </summary>
+    private const string OverlayMarker = ".overlay";
+
+    /// <summary>
+    /// File name stem to profile. Anything else ending in <c>.dll.config</c> is
+    /// ignored rather than guessed at, so adding an unrelated config as an
+    /// <c>AdditionalFile</c> cannot quietly join a profile.
+    /// </summary>
+    private static readonly (string Stem, string Profile)[] ConfigStems =
+    [
+        ("gstreamer-sharp", SystemProfile),
+        ("gstreamer-full", FullProfile),
+    ];
+
+    /// <summary>
+    /// Spelled out instead of taken from <see cref="Environment.NewLine"/> so the
+    /// generated text is byte-identical whichever host builds it.
+    /// </summary>
+    private const string NewLine = "\n";
+
+    /// <summary>
+    /// The profiles the loader switches on. Both are always emitted, even when
+    /// only one of the config files is present, so the consumer compiles either
+    /// way; a missing profile simply maps nothing.
+    /// </summary>
+    private static readonly string[] Profiles = [SystemProfile, FullProfile];
+
+    /// <summary>
+    /// Always present in the generated enum. The resolver names the OS it runs
+    /// on, so the members cannot depend on which entries a config happens to
+    /// contain.
+    /// </summary>
+    private static readonly string[] BaseOs = ["WINDOWS", "LINUX", "OSX"];
+
+    private static readonly DiagnosticDescriptor MalformedConfig = new(
+        id: "GSTMAP001",
+        title: "Malformed GStreamer dllmap config",
+        messageFormat: "Could not read '{0}': {1}",
+        category: "codecrush.gstreamer",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    private static readonly string GeneratedCodeAttribute = BuildGeneratedCodeAttribute();
+
+    /// <summary>
+    /// Everything above the first declaration. Ends with a newline so a template
+    /// can follow it with a declaration on the next line.
+    /// </summary>
+    private static readonly string FilePreamble = $$"""
+        // <auto-generated />
+
+        namespace CodeCrush.GStreamer.SourceGenerator;
+
+        [{{GeneratedCodeAttribute}}]
+        """;
+
+    /// <summary>
+    /// Switch arms nested in the generated class always sit three four-space
+    /// levels deep - class, method, switch - so the helper can own that layout
+    /// and the templates just place <c>{{Arms}}</c> on a line of its own at the
+    /// template's base indentation.
+    /// </summary>
+    private const string ArmIndent = "            ";
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-            
-        var redirectDll = context.AdditionalTextsProvider
-                .Where(a => a.Path.EndsWith("gstreamer-sharp.dll.config"))
-                .Select((a, ct) => a.GetText(ct))
-                .Where(t => t is not null)
-                .SelectMany((t, ct) =>
-                {
-                    var xml = XDocument.Parse(t!.ToString(),LoadOptions.None);
-                    return xml
-                        .Element("configuration")?
-                        .Elements("dllmap")
-                        .Select(e => new DllMapRecord(
-                            e.Attribute("dll")?.Value ?? string.Empty,
-                            e.Attribute("target")?.Value ?? string.Empty, 
-                            e.Attribute("os")?.Value ?? string.Empty
-                            )) ?? [];
-                })
-                .Collect()
-            ;
-            
-            
-        context.RegisterSourceOutput(redirectDll, static (sp, records) =>
+        var configs = context.AdditionalTextsProvider
+            .Select(static (text, _) => (Text: text, Kind: Classify(text.Path)))
+            .Where(static config => config.Kind is not null)
+            .Select(static (config, ct) => Parse(config.Text, config.Kind!.Value, ct))
+            .Collect();
+
+        context.RegisterSourceOutput(configs, static (spc, parsed) =>
         {
-            var osEnum = GenerateEnum(records.Select(r => r.Os).Prepend("Windows"));
-            sp.AddSource("OsEnum.g.cs", osEnum);
-            sp.AddSource("DllMap.g.cs", GenerateMapClass(records));
+            var records = ImmutableArray.CreateBuilder<DllMapRecord>();
+
+            foreach (var (fileRecords, error) in parsed)
+            {
+                if (error is not null)
+                    spc.ReportDiagnostic(error);
+
+                records.AddRange(fileRecords);
+            }
+
+            var all = records.ToImmutable();
+            spc.AddSource("OsEnum.g.cs", GenerateOsEnum(all));
+            spc.AddSource("RuntimeProfile.g.cs", GenerateProfilesEnum());
+            spc.AddSource("DllMap.g.cs", GenerateMapClass(all));
         });
     }
 
-    private static string GenerateEnum(IEnumerable<string> os)
+    /// <summary>
+    /// Reads the profile and the layer out of a config's file name, or returns
+    /// <see langword="null"/> when the file is not a profile config.
+    /// </summary>
+    private static (string Profile, int Layer)? Classify(string path)
     {
-        // lang=c#
-        var enumClass = $$"""
-                        // <auto-generated />
-                         namespace CodeCrush.GStreamer.SourceGenerator;
-                         
-                         [{{GeneratedCodeAttribute}}]
-                         public enum OsEnum
-                         {
-                            {{os
-                                .Select(o => o.ToUpper())
-                                .Distinct()
-                                .Aggregate((acc, o) => $"{acc},{o}")}}
-                         }
-                        """;
+        var name = Path.GetFileName(path);
+        if (!name.EndsWith(ConfigSuffix, StringComparison.OrdinalIgnoreCase))
+            return null;
 
-        return enumClass;
-    }
-
-    private static string GenerateMapClass(IReadOnlyCollection<DllMapRecord> records)
-    {
-        
-        var groups = records.GroupBy(r => r.Os);
-
-        var llFunc = new LinkedList<string>();
-        var llOs = new LinkedList<string>();
-        
-        foreach (var g in groups)
+        var stem = name.Substring(0, name.Length - ConfigSuffix.Length);
+        var layer = 0;
+        if (stem.EndsWith(OverlayMarker, StringComparison.OrdinalIgnoreCase))
         {
-            // lang=c#
-            var func = $$"""
-                          private static string GetDllTarget{{g.Key}}(global::System.String dllName)
-                          {
-                              return dllName switch 
-                              {
-                                 {{g.Aggregate("_ => dllName",
-                                      (acc, e) => 
-                                          $"\"{e.Source}\" => \"{e.Target}\",\n\t\t{acc}")
-                                 }}
-                              };
-                          }
-                         """;
-            llOs.AddLast(g.Key);
-            llFunc.AddLast(func);
+            stem = stem.Substring(0, stem.Length - OverlayMarker.Length);
+            layer = 1;
         }
 
-        
-        // lang=c#
-        var classDefinition = $$"""
-                    // <auto-generated />
-                    namespace CodeCrush.GStreamer.SourceGenerator;
-                    [{{GeneratedCodeAttribute}}]
-                    public static class DllMap
-                    {
-                        public static string GetDllTarget(global::CodeCrush.GStreamer.SourceGenerator.OsEnum os, global::System.String dllName)
-                        {
-                            return os switch 
-                            {
-                                {{llOs
-                                    .Aggregate("_ => dllName",(acc, e) => 
-                                        $"global::CodeCrush.GStreamer.SourceGenerator.OsEnum.{e.ToUpper()} => GetDllTarget{e}(dllName),\n\t\t\t{acc}")}}
-                                ,
-                            };
-                        }
-                        {{llFunc.Aggregate((acc, e) => $"{acc}\n{e}")}}
-                    }
-                    """;
-        
-        return classDefinition;
+        foreach (var (candidate, profile) in ConfigStems)
+        {
+            if (string.Equals(stem, candidate, StringComparison.OrdinalIgnoreCase))
+                return (profile, layer);
+        }
+
+        return null;
     }
+
+    private static (ImmutableArray<DllMapRecord> Records, Diagnostic? Error) Parse(
+        AdditionalText text,
+        (string Profile, int Layer) kind,
+        CancellationToken ct)
+    {
+        var content = text.GetText(ct);
+        if (content is null)
+            return (ImmutableArray<DllMapRecord>.Empty, null);
+
+        XDocument document;
+        try
+        {
+            document = XDocument.Parse(content.ToString(), LoadOptions.None);
+        }
+        catch (XmlException ex)
+        {
+            var location = Location.Create(text.Path, new TextSpan(0, 0), new LinePositionSpan());
+            return (ImmutableArray<DllMapRecord>.Empty,
+                Diagnostic.Create(MalformedConfig, location, text.Path, ex.Message));
+        }
+
+        var entries = document
+            .Element("configuration")?
+            .Elements("dllmap")
+            .Select(e => new DllMapRecord(
+                kind.Profile,
+                (e.Attribute("os")?.Value ?? string.Empty).Trim().ToUpperInvariant(),
+                (e.Attribute("dll")?.Value ?? string.Empty).Trim(),
+                (e.Attribute("target")?.Value ?? string.Empty).Trim(),
+                kind.Layer))
+            .Where(r => r.Os.Length > 0 && r.Source.Length > 0 && r.Target.Length > 0)
+            ?? [];
+
+        return (entries.ToImmutableArray(), null);
+    }
+
+    private static string GenerateOsEnum(ImmutableArray<DllMapRecord> records)
+    {
+        var names = BaseOs
+            .Concat(records.Select(static r => r.Os))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static name => Rank(BaseOs, name))
+            .ThenBy(static name => name, StringComparer.Ordinal)
+            .ToImmutableArray();
+
+        return $$"""
+            {{FilePreamble}}
+            public enum OsEnum
+            {
+            {{EnumMembers(names)}}
+            }
+            """ + NewLine;
+    }
+
+    private static string GenerateProfilesEnum() => $$"""
+        {{FilePreamble}}
+        public enum RuntimeProfile
+        {
+        {{EnumMembers(Profiles)}}
+        }
+        """ + NewLine;
+
+    private static string GenerateMapClass(ImmutableArray<DllMapRecord> records)
+    {
+        // Sorting by layer first means an overlay entry lands after the base
+        // entry for the same (os, dll) no matter which AdditionalFile the
+        // compiler happened to hand over first, and the last one wins.
+        var maps = records
+            .OrderBy(static r => r.Layer)
+            .GroupBy(static r => (r.Profile, r.Os))
+            .ToDictionary(
+                static group => group.Key,
+                static group => group
+                    .GroupBy(static r => r.Source, StringComparer.Ordinal)
+                    .Select(static sameDll => sameDll.Last())
+                    .ToImmutableArray());
+
+        var dispatch = SwitchArms(Profiles
+            .Select(static profile => ($"RuntimeProfile.{profile}", $"Get{Pascal(profile)}Target(os, dllName)"))
+            .Append(("_", $"Get{Pascal(Profiles[0])}Target(os, dllName)")));
+
+        var methods = string.Join(
+            NewLine + NewLine,
+            Profiles.Select(profile => ProfileMethods(profile, records, maps)));
+
+        return $$"""
+            {{FilePreamble}}
+            public static class DllMap
+            {
+                public static global::System.String GetDllTarget(RuntimeProfile profile, OsEnum os, global::System.String dllName)
+                {
+                    return profile switch
+                    {
+            {{dispatch}}
+                    };
+                }
+
+            {{methods}}
+            }
+            """ + NewLine;
+    }
+
+    /// <summary>
+    /// The <c>os</c> dispatch method for one profile plus one lookup method per
+    /// OS it has entries for.
+    /// </summary>
+    private static string ProfileMethods(
+        string profile,
+        ImmutableArray<DllMapRecord> records,
+        Dictionary<(string Profile, string Os), ImmutableArray<DllMapRecord>> maps)
+    {
+        var osNames = records
+            .Where(r => r.Profile == profile)
+            .Select(static r => r.Os)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static os => Rank(BaseOs, os))
+            .ThenBy(static os => os, StringComparer.Ordinal)
+            .ToArray();
+
+        var dispatch = SwitchArms(osNames
+            .Select(os => ($"OsEnum.{os}", $"Get{Pascal(profile)}Target{Pascal(os)}(dllName)"))
+            .Append(("_", "dllName")));
+
+        var dispatchMethod = $$"""
+                private static global::System.String Get{{Pascal(profile)}}Target(OsEnum os, global::System.String dllName)
+                {
+                    return os switch
+                    {
+            {{dispatch}}
+                    };
+                }
+            """;
+
+        var lookups = osNames.Select(os => LookupMethod(profile, os, maps[(profile, os)]));
+
+        return string.Join(NewLine + NewLine, new[] { dispatchMethod }.Concat(lookups));
+    }
+
+    private static string LookupMethod(string profile, string os, ImmutableArray<DllMapRecord> entries)
+    {
+        var arms = SwitchArms(entries
+            .OrderBy(static r => r.Source, StringComparer.Ordinal)
+            .Select(static r => (Quote(r.Source), Quote(r.Target)))
+            .Append(("_", "dllName")));
+
+        return $$"""
+                private static global::System.String Get{{Pascal(profile)}}Target{{Pascal(os)}}(global::System.String dllName)
+                {
+                    return dllName switch
+                    {
+            {{arms}}
+                    };
+                }
+            """;
+    }
+
+    /// <summary>Formats <c>pattern =&gt; value,</c> switch arms, one per line.</summary>
+    private static string SwitchArms(IEnumerable<(string Pattern, string Value)> arms) =>
+        string.Join(NewLine, arms.Select(static arm => $"{ArmIndent}{arm.Pattern} => {arm.Value},"));
+
+    private static string EnumMembers(IEnumerable<string> names) =>
+        string.Join(NewLine, names.Select(static name => "    " + name + ","));
+
+    private static string Quote(string value) => "\"" + value + "\"";
+
+    private static string BuildGeneratedCodeAttribute()
+    {
+        var assembly = typeof(DllMapperGenerator).Assembly.GetName();
+        return $"""global::System.CodeDom.Compiler.GeneratedCode("{assembly.Name}", "{assembly.Version}")""";
+    }
+
+    /// <summary>
+    /// Sort key that keeps the well-known members first and in a stable order,
+    /// and appends anything unexpected alphabetically.
+    /// </summary>
+    private static int Rank(string[] order, string name) => Array.IndexOf(order, name) is var index && index >= 0
+        ? index
+        : int.MaxValue;
+
+    private static string Pascal(string value) =>
+        value.Length == 0 ? "Unknown" : char.ToUpperInvariant(value[0]) + value.Substring(1).ToLowerInvariant();
 }

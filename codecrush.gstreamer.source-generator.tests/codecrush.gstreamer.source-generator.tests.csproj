@@ -26,6 +26,11 @@
 
     <ItemGroup>
       <ProjectReference Include="..\codecrush.gstreamer.source-generator\codecrush.gstreamer.source-generator.csproj" />
+      <!--
+        The generated DllMap lives in the bindings assembly, so the coverage
+        test queries the real map instead of a copy of the config files.
+      -->
+      <ProjectReference Include="..\codecrush.gstreamer.net\codecrush.gstreamer.net.csproj" />
     </ItemGroup>
 
 </Project>

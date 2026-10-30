@@ -23,9 +23,28 @@
     </PropertyGroup>
     
     <ItemGroup>
+        <!--
+            gstreamer-sharp's sources, minus custom/Application.cs: the local
+            Overrides/Application.cs replaces it (no eager Gst.WebRTC GType
+            registration, plus gst_init_static_plugins() for gst-full).
+        -->
         <Compile Include="$(GStreamerSharpSourcesDir)/generated/**/*.cs" />
         <Compile Include="$(GStreamerSharpSourcesDir)/custom/**/*.cs" />
-        <AdditionalFiles Include="$(GStreamerSharpSourcesDir)/gstreamer-sharp.dll.config"/>
+        <Compile Remove="$(GStreamerSharpSourcesDir)/custom/Application.cs" />
+        <!--
+            The dllmap documents, one profile each. The file name picks the
+            profile; a ".overlay" in the name means the file is applied on top
+            of that profile's base file, entry by entry.
+
+            gstreamer-sharp.dll.config is consumed straight from the submodule,
+            so a submodule bump that adds a library needs no copy step here.
+            gstreamer-sharp.overlay.dll.config only carries the entries upstream
+            gets wrong or does not have. gstreamer-full.dll.config has no
+            upstream counterpart - it is ours.
+        -->
+        <AdditionalFiles Include="$(GStreamerSharpSourcesDir)gstreamer-sharp.dll.config"/>
+        <AdditionalFiles Include="gstreamer-sharp.overlay.dll.config"/>
+        <AdditionalFiles Include="gstreamer-full.dll.config"/>
     </ItemGroup>
     
     <ItemGroup>
