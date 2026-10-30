@@ -11,9 +11,15 @@
         <IsRoslynComponent>true</IsRoslynComponent>
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <TargetFramework>netstandard2.0</TargetFramework>
-    </PropertyGroup>
-    
 
+        <!--
+            RS2008 wants AnalyzerReleases.Shipped.md / .Unshipped.md so that rule IDs
+            carry release semantics. That only matters for analyzers published as a
+            package; this generator is consumed as a project reference inside this
+            repository, so the release-tracking files would be pure bookkeeping.
+        -->
+        <NoWarn>$(NoWarn);RS2008</NoWarn>
+    </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="5.3.0">
