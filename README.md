@@ -26,7 +26,7 @@ At runtime, `Gst.Application` installs a `DllImportResolver` that uses the gener
 
 ## Prerequisites
 
-- .NET SDK 10.0 or newer
+- .NET SDK 8.0 or newer
 - Git submodules initialized
 - GStreamer installed on the target machine
 

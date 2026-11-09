@@ -79,7 +79,7 @@ producing a partial registry.
 
 ## Notes
 
-- Targets: `net10.0`
+- Targets: `net8.0`,`net9.0`,`net10.0`
 - Do not install your own `DllImport` resolver for the `Gst`/`GLib` assemblies
   alongside this package: only one resolver can be registered per assembly.
   Installing one first is tolerated, but that resolver then decides how the
