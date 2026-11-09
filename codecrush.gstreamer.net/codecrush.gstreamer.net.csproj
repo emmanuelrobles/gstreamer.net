@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         
@@ -16,6 +15,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <RepositoryType>git</RepositoryType>
         <RepositoryUrl>https://forgejo.codecrush.dev/CodeCrush/codecrush.gstreamer.net</RepositoryUrl>
+        <TargetFrameworks>net10.0;net8.0;net9.0</TargetFrameworks>
     </PropertyGroup>
     
     <PropertyGroup>
